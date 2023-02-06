@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+set -e
+
 git init
 
 ## real.txt ##
