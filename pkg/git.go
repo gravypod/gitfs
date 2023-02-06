@@ -103,7 +103,7 @@ func (g cliGit) execute(args ...string) *exec.Cmd {
 func (g cliGit) InitBare() error {
 	// TODO(gravypod): Move away from `master` as the main branch. Allow users to
 	// to configure this on their own.
-	cmd := g.execute("init", "--bare", "--initial-branch", "master")
+	cmd := g.execute("init", "--bare")
 	cmd.Stderr = os.Stderr
 	err := cmd.Start()
 	if err != nil {
