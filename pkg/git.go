@@ -17,8 +17,8 @@ package pkg
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -34,7 +34,7 @@ type ListTreeEntry struct {
 	Path   string
 }
 
-func NewListTreeEntry(line string) (ListTreeEntry, error) {
+func newListTreeEntry(line string) (ListTreeEntry, error) {
 	modeTextEnd := strings.IndexByte(line, ' ')
 	if modeTextEnd == -1 {
 		return ListTreeEntry{}, fmt.Errorf("mode not found in: %s", line)
@@ -100,55 +100,6 @@ func (g cliGit) execute(args ...string) *exec.Cmd {
 	return cmd
 }
 
-func (g cliGit) InitBare() error {
-	// TODO(gravypod): Move away from `master` as the main branch. Allow users to
-	// to configure this on their own.
-	cmd := g.execute("init", "--bare")
-	cmd.Stderr = os.Stderr
-	err := cmd.Start()
-	if err != nil {
-		return err
-	}
-	return cmd.Wait()
-}
-
-func (g cliGit) AddAll(workspace string) error {
-	cmd := g.execute("--work-tree", workspace, "add", "--all")
-	cmd.Stderr = os.Stderr
-	err := cmd.Start()
-	if err != nil {
-		return err
-	}
-	return cmd.Wait()
-}
-
-func (g cliGit) Commit(message string, worktree string) error {
-	cmd := g.execute("--work-tree", worktree, "commit", "-m", message)
-	cmd.Stderr = os.Stderr
-	err := cmd.Start()
-	if err != nil {
-		return err
-	}
-	return cmd.Wait()
-}
-
-func (g cliGit) MakeMirroredRepository(message string, worktree string) error {
-	err := g.InitBare()
-	if err != nil {
-		return err
-	}
-
-	worktree, err = filepath.Abs(worktree)
-	if err != nil {
-		return fmt.Errorf("couldn't find worktree: %v", err)
-	}
-	err = g.AddAll(worktree)
-	if err != nil {
-		return fmt.Errorf("couldn't create structure: %v", err)
-	}
-	return g.Commit(message, worktree)
-}
-
 func (g cliGit) ListTree(treeLike, rootRelativePath string, handler func(entry ListTreeEntry) error) error {
 	// TODO(gravypod): Support listing multiple revisions.
 	cmd := g.execute(
@@ -173,7 +124,7 @@ func (g cliGit) ListTree(treeLike, rootRelativePath string, handler func(entry L
 		line := reader.Text()
 
 		// TODO(gravypod): Support --long to include file sizes
-		entry, err := NewListTreeEntry(line)
+		entry, err := newListTreeEntry(line)
 		if err != nil {
 			return fmt.Errorf("failed to parse ls-tree line: %v", err)
 		}
@@ -204,7 +155,7 @@ func (g cliGit) ReadBlob(hash string) ([]byte, error) {
 	}
 	defer cmd.Wait()
 
-	contents, err := ioutil.ReadAll(stdout)
+	contents, err := io.ReadAll(stdout)
 	if err != nil {
 		return []byte{}, err
 	}
