@@ -18,16 +18,75 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
+type GitUnixPerms uint16
+
+const (
+	GitRegularFile GitFileType = iota
+	GitDirectory
+	GitSymlink
+)
+
+func (perms GitUnixPerms) String() string {
+	return strconv.FormatUint(uint64(perms), 8)
+}
+
+type GitFileType uint8
+
+func (fileType GitFileType) String() string {
+	if fileType == GitSymlink {
+		return "GitSymlink"
+	}
+	if fileType == GitDirectory {
+		return "GitDirectory"
+	}
+	return "GitRegularFile"
+}
+
+type GitFileMode struct {
+	Type            GitFileType
+	UnixPermissions GitUnixPerms
+}
+
+// newGitFileMode takes a git file mode oct and turns it into fs.FileMode objects. It performs other fixes to the file
+// mode to hack around edge cases in git. More details are available here: https://unix.stackexchange.com/a/450488
+func newGitFileMode(gitMode uint16) GitFileMode {
+	// Unixy file permissions are stored in the last 9 bits.
+	var (
+		gitPermsMask     uint16 = 0000777
+		gitDirectoryMask uint16 = 0040000
+		gitSymlinkMask   uint16 = 0120000
+		gitLinkMask      uint16 = 0160000
+	)
+
+	mode := GitFileMode{
+		UnixPermissions: GitUnixPerms(gitMode & gitPermsMask),
+	}
+
+	if gitMode&gitSymlinkMask == gitSymlinkMask || gitMode&gitLinkMask == gitLinkMask {
+		mode.Type = GitSymlink
+	} else if gitMode&gitDirectoryMask == gitDirectoryMask {
+		// Git does not store permissions for directories so we need
+		// to add these back in. 444 means user, group, and other can
+		// read which essentially makes this a read-only directory.
+		mode.Type = GitDirectory
+		mode.UnixPermissions = 0444
+	} else {
+		mode.Type = GitRegularFile
+	}
+
+	return mode
+}
+
 type ListTreeEntry struct {
-	Mode   string
+	Mode   GitFileMode
 	Object string
 	Hash   string
 	Size   string
@@ -37,7 +96,7 @@ type ListTreeEntry struct {
 func newListTreeEntry(line string) (ListTreeEntry, error) {
 	modeTextEnd := strings.IndexByte(line, ' ')
 	if modeTextEnd == -1 {
-		return ListTreeEntry{}, fmt.Errorf("mode not found in: %s", line)
+		return ListTreeEntry{}, fmt.Errorf("oct not found in: %s", line)
 	}
 	modeText := line[:modeTextEnd]
 	line = line[modeTextEnd+1:]
@@ -60,8 +119,13 @@ func newListTreeEntry(line string) (ListTreeEntry, error) {
 	sizeText := line[:sizeTextEnd]
 	pathText := line[len(sizeText)+1:]
 
+	modeNum, err := strconv.ParseUint(modeText, 8, 16)
+	if err != nil {
+		return ListTreeEntry{}, err
+	}
+
 	return ListTreeEntry{
-		Mode:   strings.TrimSpace(modeText),
+		Mode:   newGitFileMode(uint16(modeNum)),
 		Object: strings.TrimSpace(objectTypeText),
 		Hash:   strings.TrimSpace(hashText),
 		Size:   strings.TrimSpace(sizeText),
@@ -160,30 +224,4 @@ func (g cliGit) ReadBlob(hash string) ([]byte, error) {
 		return []byte{}, err
 	}
 	return contents, nil
-}
-
-// Below we have some functions that take the git file mode and turn them into fs.FileMode objects and perform other
-// checks against them. More details are available here: https://unix.stackexchange.com/a/450488
-
-func ParseGitFileMode(gitMode uint16) fs.FileMode {
-	// Unixy file permissions are stored in the last 9 bits.
-	var (
-		gitPermsMask     uint16 = 0000777
-		gitDirectoryMask uint16 = 0040000
-		gitSymlinkMask   uint16 = 0120000
-		gitLinkMask      uint16 = 0160000
-	)
-
-	fileMode := fs.FileMode(gitMode & gitPermsMask)
-
-	if gitMode&gitSymlinkMask == gitSymlinkMask || gitMode&gitLinkMask == gitLinkMask {
-		fileMode |= fs.ModeSymlink
-	} else if gitMode&gitDirectoryMask == gitDirectoryMask {
-		// Git does not store permissions for directories so we need
-		// to add these back in. 444 means user, group, and other can
-		// read which essentially makes this a read-only directory.
-		fileMode = fs.ModeDir | fs.FileMode(0444)
-	}
-
-	return fileMode
 }

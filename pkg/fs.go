@@ -186,11 +186,12 @@ func (s RepositoryFileSystem) lsTree(path GitPath, children bool, handler func(f
 		}
 
 		// Mode
-		modeNum, err := strconv.ParseUint(entry.Mode, 8, 16)
-		if err != nil {
-			return err
+		file.mode = fs.FileMode(entry.Mode.UnixPermissions)
+		if entry.Mode.Type == GitSymlink {
+			file.mode |= fs.ModeSymlink
+		} else if entry.Mode.Type == GitDirectory {
+			file.mode |= fs.ModeDir
 		}
-		file.mode = ParseGitFileMode(uint16(modeNum))
 
 		// Size
 		if entry.Size != "-" {
