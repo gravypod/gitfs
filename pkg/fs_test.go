@@ -19,7 +19,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -31,28 +30,8 @@ func fileMap(paths []os.FileInfo) map[string]os.FileInfo {
 	return pathsMap
 }
 
-func makeRepository(t *testing.T) Git {
-	testDataPath := filepath.Join("testdata", "repo")
-
-	tmp := t.TempDir()
-
-	friendlyGit, err := NewCliGit(filepath.Join(tmp, ".git"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rawGit := friendlyGit.(cliGit)
-
-	err = rawGit.MakeMirroredRepository("hello world", testDataPath)
-	if err != nil {
-		t.Fatalf("couln't create fake repository: %v", err)
-	}
-
-	return rawGit
-}
-
 func TestRepositoryFileSystemReadOnly(t *testing.T) {
-	git := makeRepository(t)
+	git := newGitCliFromPlaybook(t, "base")
 	fs := NewGitFileSystem(git)
 	t.Run("reported capabilities", func(t *testing.T) {
 		capabilities := billy.Capabilities(fs)
@@ -211,7 +190,7 @@ func TestRepositoryFileSystemReadOnly(t *testing.T) {
 				t.Fatalf("failed to list %s directory: %v", readDirPath, err)
 			}
 			if len(paths) != len(expectedPaths) {
-				t.Fatalf("listing did not include all files: %v", paths)
+				t.Fatalf("listing '%s' did not include all files: %v", readDirPath, paths)
 			}
 			pathsMap := fileMap(paths)
 
@@ -251,7 +230,7 @@ func TestRepositoryFileSystemReadOnly(t *testing.T) {
 		if err != nil {
 			t.Fatalf("couldn't open broken symlink: %v", err)
 		}
-		contents, err := ioutil.ReadAll(file)
+		contents, err := io.ReadAll(file)
 		if err != nil {
 			t.Fatalf("couldn't read broken symlink: %v", err)
 		}
