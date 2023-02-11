@@ -44,7 +44,7 @@ type billyFuse struct {
 	fs      billy.Filesystem
 }
 
-func (f billyFuse) getInode(id fuseops.InodeID) (*billyInode, error) {
+func (f *billyFuse) getInode(id fuseops.InodeID) (*billyInode, error) {
 	if id == 0 {
 		// Zero is not a valid node id
 		return nil, fuse.EINVAL
@@ -137,7 +137,7 @@ func NewBillyFuseServer(fs billy.Filesystem) (fuse.Server, error) {
 	return fuseutil.NewFileSystemServer(fuseFileSystem), nil
 }
 
-func (f billyFuse) findChildInode(parent fuseops.InodeID, name string) (fuseops.InodeID, error) {
+func (f *billyFuse) findChildInode(parent fuseops.InodeID, name string) (fuseops.InodeID, error) {
 	log.Println("fuse findChildInode()")
 	inode, err := f.getInode(parent)
 	if err != nil {
@@ -279,7 +279,7 @@ func (f *billyFuse) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) error {
 	return nil
 }
 
-func (f billyFuse) getBillyPath(inodeId fuseops.InodeID) (string, error) {
+func (f *billyFuse) getBillyPath(inodeId fuseops.InodeID) (string, error) {
 	log.Println("fuse getBillyPath()")
 	inode, err := f.getInode(inodeId)
 	if err != nil {
