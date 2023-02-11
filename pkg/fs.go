@@ -354,7 +354,7 @@ func (s RepositoryFileSystem) MkdirAll(filename string, perm os.FileMode) error 
 
 func (s RepositoryFileSystem) Root() string {
 	log.Printf("Root()\n")
-	return s.root.LazyRootRelativePath()
+	return s.root.RootRelativePath()
 }
 
 func (s RepositoryFileSystem) Chroot(path string) (billy.Filesystem, error) {
@@ -400,11 +400,12 @@ func (s RepositoryFileSystem) Readlink(link string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	realGitPath, err := gitPath.Parent().Resolve(string(contents))
+	parent := gitPath.Parent()
+	realGitPath, err := parent.Resolve(string(contents))
 	if err != nil {
 		return "", err
 	}
-	return realGitPath.LazyRootRelativePath(), nil
+	return realGitPath.RootRelativePath(), nil
 }
 
 // billy.Change type implementation

@@ -27,47 +27,62 @@ var (
 const SeparatorString = string(filepath.Separator)
 
 type GitPath struct {
-	AbsolutePath string
+	Path         []string
+	cachedString *string // String version of the Path.
 }
 
-func (p GitPath) Parent() GitPath {
-	return GitPath{AbsolutePath: filepath.Dir(p.AbsolutePath)}
+func (p *GitPath) Parent() GitPath {
+	if p.IsRoot() {
+		return GitPath{}
+	}
+	return GitPath{Path: p.Path[:len(p.Path)-1]}
 }
 
-func (p GitPath) Resolve(request string) (GitPath, error) {
-	absolutePath := filepath.Join(p.AbsolutePath, request)
+func (p *GitPath) Resolve(request string) (GitPath, error) {
+	requestParts := strings.Split(request, SeparatorString)
+	scratch := make([]string, len(p.Path)+len(requestParts))
 
-	if !strings.HasPrefix(absolutePath, p.AbsolutePath) {
-		return GitPath{}, ErrEscapesChroot
+	idx := 0
+
+	for _, part := range p.Path {
+		scratch[idx] = part
+		idx += 1
+	}
+
+	for _, path := range requestParts {
+		switch path {
+		case "..":
+			if idx == 0 {
+				return GitPath{}, ErrEscapesChroot
+			}
+			idx -= 1
+		case ".":
+			continue
+		default:
+			scratch[idx] = path
+			idx += 1
+		}
 	}
 
 	return GitPath{
-		AbsolutePath: absolutePath,
+		Path: scratch[:idx],
 	}, nil
 }
 
-func (p GitPath) IsRoot() bool {
-	return p.AbsolutePath == SeparatorString
+func (p *GitPath) IsRoot() bool {
+	return len(p.Path) == 0
 }
 
-func (p GitPath) RootRelativePath() string {
-	return filepath.Join(".", p.AbsolutePath)
-}
-
-// LazyRootRelativePath returns a relative path from the root of the repository
-// that looks something like this: "foo/bar/baz.txt" or "." if we are pointing
-// to the root directory. This is done because Billy expects these kinds of paths
-// as input/output.
-func (p GitPath) LazyRootRelativePath() string {
-	path := strings.TrimPrefix(p.AbsolutePath, "/")
-	if path == "" {
-		return "."
+func (p *GitPath) RootRelativePath() string {
+	if p.cachedString == nil {
+		allocated := filepath.Join(".", strings.Join(p.Path, SeparatorString))
+		p.cachedString = &allocated
 	}
-	return path
+	return *(p.cachedString)
 }
 
 func RootGitPath() GitPath {
 	return GitPath{
-		AbsolutePath: SeparatorString,
+		Path: nil,
 	}
 }
