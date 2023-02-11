@@ -120,7 +120,7 @@ func (f gitFile) Truncate(size int64) error {
 type RepositoryFileSystem struct {
 	git Git
 	// Either an empty string or a path to a directory with the repository.
-	root GitPath
+	root FilePath
 }
 
 func NewGitFileSystem(git Git) billy.Filesystem {
@@ -158,8 +158,8 @@ func (s RepositoryFileSystem) openFile(filename string, fileInfo gitFileInfo) (b
 	return file, nil
 }
 
-func (s RepositoryFileSystem) lsTree(path GitPath, children bool, handler func(file gitFileInfo) error) error {
-	relativePath := path.RootRelativePath()
+func (s RepositoryFileSystem) lsTree(path FilePath, children bool, handler func(file gitFileInfo) error) error {
+	relativePath := path.String()
 	// We want to list the contents of this tree (aka list the contents of a directory) so we need to
 	// append a trailing path otherwise ls-tree will just print the tree's metadata.
 	if children {
@@ -206,7 +206,7 @@ func (s RepositoryFileSystem) lsTree(path GitPath, children bool, handler func(f
 	})
 }
 
-func (s RepositoryFileSystem) lsFile(path GitPath) (gitFileInfo, error) {
+func (s RepositoryFileSystem) lsFile(path FilePath) (gitFileInfo, error) {
 	seen := false
 	var returnedPath gitFileInfo
 	err := s.lsTree(path, false, func(file gitFileInfo) error {
@@ -354,7 +354,7 @@ func (s RepositoryFileSystem) MkdirAll(filename string, perm os.FileMode) error 
 
 func (s RepositoryFileSystem) Root() string {
 	log.Printf("Root()\n")
-	return s.root.RootRelativePath()
+	return s.root.String()
 }
 
 func (s RepositoryFileSystem) Chroot(path string) (billy.Filesystem, error) {
@@ -405,7 +405,7 @@ func (s RepositoryFileSystem) Readlink(link string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return realGitPath.RootRelativePath(), nil
+	return realGitPath.String(), nil
 }
 
 // billy.Change type implementation

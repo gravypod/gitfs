@@ -26,19 +26,19 @@ var (
 
 const SeparatorString = string(filepath.Separator)
 
-type GitPath struct {
+type FilePath struct {
 	Path         []string
 	cachedString *string // String version of the Path.
 }
 
-func (p *GitPath) Parent() GitPath {
+func (p *FilePath) Parent() FilePath {
 	if p.IsRoot() {
-		return GitPath{}
+		return FilePath{}
 	}
-	return GitPath{Path: p.Path[:len(p.Path)-1]}
+	return FilePath{Path: p.Path[:len(p.Path)-1]}
 }
 
-func (p *GitPath) Resolve(request string) (GitPath, error) {
+func (p *FilePath) Resolve(request string) (FilePath, error) {
 	requestParts := strings.Split(request, SeparatorString)
 	scratch := make([]string, len(p.Path)+len(requestParts))
 
@@ -53,7 +53,7 @@ func (p *GitPath) Resolve(request string) (GitPath, error) {
 		switch path {
 		case "..":
 			if idx == 0 {
-				return GitPath{}, ErrEscapesChroot
+				return FilePath{}, ErrEscapesChroot
 			}
 			idx -= 1
 		case ".":
@@ -64,16 +64,16 @@ func (p *GitPath) Resolve(request string) (GitPath, error) {
 		}
 	}
 
-	return GitPath{
+	return FilePath{
 		Path: scratch[:idx],
 	}, nil
 }
 
-func (p *GitPath) IsRoot() bool {
+func (p *FilePath) IsRoot() bool {
 	return len(p.Path) == 0
 }
 
-func (p *GitPath) RootRelativePath() string {
+func (p *FilePath) String() string {
 	if p.cachedString == nil {
 		allocated := filepath.Join(".", strings.Join(p.Path, SeparatorString))
 		p.cachedString = &allocated
@@ -81,8 +81,8 @@ func (p *GitPath) RootRelativePath() string {
 	return *(p.cachedString)
 }
 
-func RootGitPath() GitPath {
-	return GitPath{
+func RootGitPath() FilePath {
+	return FilePath{
 		Path: nil,
 	}
 }
