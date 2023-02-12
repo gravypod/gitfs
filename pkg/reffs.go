@@ -73,7 +73,7 @@ func (i gitFileInfo) Sys() interface{} {
 
 type gitFile struct {
 	name     string
-	fs       RepositoryFileSystem
+	fs       ReferenceFileSystem
 	info     gitFileInfo
 	contents []byte
 	reader   *bytes.Reader
@@ -117,31 +117,22 @@ func (f gitFile) Truncate(size int64) error {
 	return billy.ErrNotSupported
 }
 
-type RepositoryFileSystem struct {
-	git Git
+type ReferenceFileSystem struct {
+	git       Git
+	reference GitReference
 	// Either an empty string or a path to a directory with the repository.
 	root FilePath
 }
 
-func NewGitFileSystem(git Git) billy.Filesystem {
-	return RepositoryFileSystem{
-		git:  git,
-		root: RootGitPath(),
+func NewReferenceFileSystem(git Git, reference GitReference) billy.Filesystem {
+	return ReferenceFileSystem{
+		git:       git,
+		reference: reference,
+		root:      RootGitPath(),
 	}
 }
 
-func NewCliGitFileSystem(gitDirectory string) (billy.Filesystem, error) {
-	git, err := NewCliGit(gitDirectory)
-	if err != nil {
-		return nil, err
-	}
-	return RepositoryFileSystem{
-		git:  git,
-		root: RootGitPath(),
-	}, nil
-}
-
-func (s RepositoryFileSystem) openFile(filename string, fileInfo gitFileInfo) (billy.File, error) {
+func (s ReferenceFileSystem) openFile(filename string, fileInfo gitFileInfo) (billy.File, error) {
 	contents, err := s.git.ReadBlob(fileInfo.Hash)
 	if err != nil {
 		return nil, err
@@ -158,7 +149,7 @@ func (s RepositoryFileSystem) openFile(filename string, fileInfo gitFileInfo) (b
 	return file, nil
 }
 
-func (s RepositoryFileSystem) lsTree(path FilePath, children bool, handler func(file gitFileInfo) error) error {
+func (s ReferenceFileSystem) lsTree(path FilePath, children bool, handler func(file gitFileInfo) error) error {
 	relativePath := path.String()
 	// We want to list the contents of this tree (aka list the contents of a directory) so we need to
 	// append a trailing path otherwise ls-tree will just print the tree's metadata.
@@ -213,7 +204,7 @@ func (s RepositoryFileSystem) lsTree(path FilePath, children bool, handler func(
 	})
 }
 
-func (s RepositoryFileSystem) lsFile(path FilePath) (gitFileInfo, error) {
+func (s ReferenceFileSystem) lsFile(path FilePath) (gitFileInfo, error) {
 	seen := false
 	var returnedPath gitFileInfo
 	err := s.lsTree(path, false, func(file gitFileInfo) error {
@@ -235,12 +226,12 @@ func (s RepositoryFileSystem) lsFile(path FilePath) (gitFileInfo, error) {
 
 // billy.Basic type implementation
 
-func (s RepositoryFileSystem) Create(filename string) (billy.File, error) {
+func (s ReferenceFileSystem) Create(filename string) (billy.File, error) {
 	_ = filename
 	return nil, billy.ErrReadOnly
 }
 
-func (s RepositoryFileSystem) Open(filename string) (billy.File, error) {
+func (s ReferenceFileSystem) Open(filename string) (billy.File, error) {
 	log.Printf("Open(%s)\n", filename)
 	path, err := s.root.Resolve(filename)
 	if err != nil {
@@ -253,7 +244,7 @@ func (s RepositoryFileSystem) Open(filename string) (billy.File, error) {
 	return s.openFile(filename, fileInfo)
 }
 
-func (s RepositoryFileSystem) OpenFile(filename string, flag int, perm os.FileMode) (billy.File, error) {
+func (s ReferenceFileSystem) OpenFile(filename string, flag int, perm os.FileMode) (billy.File, error) {
 	log.Printf("OpenFile(%s, %d, %s)\n", filename, flag, perm.String())
 
 	path, err := s.root.Resolve(filename)
@@ -276,7 +267,7 @@ func (s RepositoryFileSystem) OpenFile(filename string, flag int, perm os.FileMo
 	return s.openFile(filename, fileInfo)
 }
 
-func (s RepositoryFileSystem) Stat(filename string) (os.FileInfo, error) {
+func (s ReferenceFileSystem) Stat(filename string) (os.FileInfo, error) {
 	log.Printf("Stat(%s)\n", filename)
 
 	path, err := s.root.Resolve(filename)
@@ -300,24 +291,24 @@ func (s RepositoryFileSystem) Stat(filename string) (os.FileInfo, error) {
 	return s.lsFile(path)
 }
 
-func (s RepositoryFileSystem) Rename(oldpath, newpath string) error {
+func (s ReferenceFileSystem) Rename(oldpath, newpath string) error {
 	_ = oldpath
 	_ = newpath
 	return billy.ErrReadOnly
 }
 
-func (s RepositoryFileSystem) Remove(filename string) error {
+func (s ReferenceFileSystem) Remove(filename string) error {
 	_ = filename
 	return billy.ErrReadOnly
 }
 
-func (s RepositoryFileSystem) Join(elem ...string) string {
+func (s ReferenceFileSystem) Join(elem ...string) string {
 	return filepath.Clean(filepath.Join(elem...))
 }
 
 // billy.TempFile type implementation
 
-func (s RepositoryFileSystem) TempFile(dir, prefix string) (billy.File, error) {
+func (s ReferenceFileSystem) TempFile(dir, prefix string) (billy.File, error) {
 	_ = dir
 	_ = prefix
 	return nil, billy.ErrReadOnly
@@ -325,7 +316,7 @@ func (s RepositoryFileSystem) TempFile(dir, prefix string) (billy.File, error) {
 
 // billy.Dir type implementation
 
-func (s RepositoryFileSystem) ReadDir(path string) ([]os.FileInfo, error) {
+func (s ReferenceFileSystem) ReadDir(path string) ([]os.FileInfo, error) {
 	log.Printf("ReadDir(%s)\n", path)
 	gitPath, err := s.root.Resolve(path)
 	if err != nil {
@@ -351,7 +342,7 @@ func (s RepositoryFileSystem) ReadDir(path string) ([]os.FileInfo, error) {
 	return files, err
 }
 
-func (s RepositoryFileSystem) MkdirAll(filename string, perm os.FileMode) error {
+func (s ReferenceFileSystem) MkdirAll(filename string, perm os.FileMode) error {
 	_ = filename
 	_ = perm
 	return billy.ErrReadOnly
@@ -359,12 +350,12 @@ func (s RepositoryFileSystem) MkdirAll(filename string, perm os.FileMode) error 
 
 // billy.Chroot type implementation
 
-func (s RepositoryFileSystem) Root() string {
+func (s ReferenceFileSystem) Root() string {
 	log.Printf("Root()\n")
 	return s.root.String()
 }
 
-func (s RepositoryFileSystem) Chroot(path string) (billy.Filesystem, error) {
+func (s ReferenceFileSystem) Chroot(path string) (billy.Filesystem, error) {
 	log.Printf("Chroot(%s)\n", path)
 	gitPath, err := s.root.Resolve(path)
 	if err != nil {
@@ -375,7 +366,7 @@ func (s RepositoryFileSystem) Chroot(path string) (billy.Filesystem, error) {
 	//  1. path does not exist
 	//  2. path leads to a symlink
 	//  3. path is not a directory
-	return RepositoryFileSystem{
+	return ReferenceFileSystem{
 		root: gitPath,
 		git:  s.git,
 	}, nil
@@ -383,17 +374,17 @@ func (s RepositoryFileSystem) Chroot(path string) (billy.Filesystem, error) {
 
 // billy.Symlink type implementation
 
-func (s RepositoryFileSystem) Lstat(filename string) (os.FileInfo, error) {
+func (s ReferenceFileSystem) Lstat(filename string) (os.FileInfo, error) {
 	return s.Stat(filename)
 }
 
-func (s RepositoryFileSystem) Symlink(target, link string) error {
+func (s ReferenceFileSystem) Symlink(target, link string) error {
 	_ = target
 	_ = link
 	return billy.ErrReadOnly
 }
 
-func (s RepositoryFileSystem) Readlink(link string) (string, error) {
+func (s ReferenceFileSystem) Readlink(link string) (string, error) {
 	log.Printf("ReadLink(%s)\n", link)
 	gitPath, err := s.root.Resolve(link)
 	if err != nil {
@@ -417,27 +408,27 @@ func (s RepositoryFileSystem) Readlink(link string) (string, error) {
 
 // billy.Change type implementation
 
-func (s RepositoryFileSystem) Chmod(name string, mode os.FileMode) error {
+func (s ReferenceFileSystem) Chmod(name string, mode os.FileMode) error {
 	_ = name
 	_ = mode
 	return billy.ErrReadOnly
 }
 
-func (s RepositoryFileSystem) Lchown(name string, uid, gid int) error {
+func (s ReferenceFileSystem) Lchown(name string, uid, gid int) error {
 	_ = name
 	_ = uid
 	_ = gid
 	return billy.ErrReadOnly
 }
 
-func (s RepositoryFileSystem) Chown(name string, uid, gid int) error {
+func (s ReferenceFileSystem) Chown(name string, uid, gid int) error {
 	_ = name
 	_ = uid
 	_ = gid
 	return billy.ErrReadOnly
 }
 
-func (s RepositoryFileSystem) Chtimes(name string, atime time.Time, mtime time.Time) error {
+func (s ReferenceFileSystem) Chtimes(name string, atime time.Time, mtime time.Time) error {
 	_ = name
 	_ = atime
 	_ = mtime
@@ -446,7 +437,7 @@ func (s RepositoryFileSystem) Chtimes(name string, atime time.Time, mtime time.T
 
 // billy.Capable
 
-func (s RepositoryFileSystem) Capabilities() billy.Capability {
+func (s ReferenceFileSystem) Capabilities() billy.Capability {
 	log.Println("Checking capabilities of gitfs")
 	return billy.ReadCapability | billy.SeekCapability
 }

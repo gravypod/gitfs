@@ -32,7 +32,8 @@ func fileMap(paths []os.FileInfo) map[string]os.FileInfo {
 
 func TestBase(t *testing.T) {
 	git := newGitCliFromPlaybook(t, "base")
-	fs := NewGitFileSystem(git)
+	branch := "master"
+	fs := NewReferenceFileSystem(git, GitReference{Branch: &branch})
 	t.Run("reported capabilities", func(t *testing.T) {
 		capabilities := billy.Capabilities(fs)
 		writableCapabilities := []billy.Capability{

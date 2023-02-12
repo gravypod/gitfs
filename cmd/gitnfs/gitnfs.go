@@ -39,11 +39,16 @@ func main() {
 	defer listener.Close()
 	log.Printf("NFS server started at %s\n", listener.Addr())
 
-	gitfs, err := gitfs.NewCliGitFileSystem(*repositoryDirectory)
+	git, err := gitfs.NewCliGit(*repositoryDirectory)
 	if err != nil {
-		log.Panicf("could not open gitfs: %v", err)
+		log.Fatalf("Failed to create git client for directory '%s': %v", *repositoryDirectory,
+			err)
 	}
-	authHandler := nfshelper.NewNullAuthHandler(gitfs)
+
+	branch := "master"
+	fs := gitfs.NewReferenceFileSystem(git, gitfs.GitReference{Branch: &branch})
+
+	authHandler := nfshelper.NewNullAuthHandler(fs)
 	cachedFs := nfshelper.NewCachingHandler(authHandler, 1024)
 	err = nfs.Serve(listener, cachedFs)
 	if err != nil {

@@ -63,10 +63,14 @@ func main() {
 		ErrorLogger: log.New(os.Stderr, "fuse error: ", 0),
 	}
 
-	fs, err := gitfs.NewCliGitFileSystem(*repositoryDirectory)
+	git, err := gitfs.NewCliGit(*repositoryDirectory)
 	if err != nil {
-		log.Fatalf("Failed to create gitfs: %v", err)
+		log.Fatalf("Failed to create git client for directory '%s': %v", *repositoryDirectory,
+			err)
 	}
+
+	branch := "master"
+	fs := gitfs.NewReferenceFileSystem(git, gitfs.GitReference{Branch: &branch})
 
 	server, err := gitfs.NewBillyFuseServer(fs)
 	if err != nil {
