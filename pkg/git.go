@@ -16,6 +16,7 @@ package pkg
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -24,6 +25,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+)
+
+var (
+	ErrNoTreeLikeSpecified   = errors.New("cannot identify tree")
+	ErrCannotListCommit      = errors.New("cannot list commit")
+	ErrMultipleRefsSpecified = errors.New("only specify Commit, Branch, or Tag")
 )
 
 type GitUnixPerms uint16
@@ -48,6 +55,39 @@ func (fileType GitFileType) String() string {
 		return "GitDirectory"
 	}
 	return "GitRegularFile"
+}
+
+type GitReference struct {
+	Commit, Branch, Tag *string
+}
+
+func (p GitReference) treeLike() (string, error) {
+	possible := []*string{
+		p.Branch,
+		p.Commit,
+		p.Tag,
+	}
+	var selected *string
+	for _, treeLike := range possible {
+		if treeLike == nil {
+			continue
+		}
+
+		if selected != nil {
+			return "", ErrMultipleRefsSpecified
+		}
+
+		selected = treeLike
+	}
+	if selected == nil {
+		return "", ErrNoTreeLikeSpecified
+	}
+	return *selected, nil
+}
+
+type GitPath struct {
+	Reference GitReference
+	TreePath  string
 }
 
 type GitFileMode struct {
@@ -134,7 +174,10 @@ func newListTreeEntry(line string) (ListTreeEntry, error) {
 }
 
 type Git interface {
-	ListTree(treeLike, rootRelativePath string, handler func(entry ListTreeEntry) error) error
+	ListTree(path GitPath, handler func(entry ListTreeEntry) error) error
+	ListBranches(handler func(branch string) error) error
+	ListTags(handler func(branch string) error) error
+	ListCommits(ref GitReference, handler func(branch string) error) error
 	ReadBlob(hash string) ([]byte, error)
 }
 
@@ -164,22 +207,122 @@ func (g cliGit) execute(args ...string) *exec.Cmd {
 	return cmd
 }
 
-func (g cliGit) ListTree(treeLike, rootRelativePath string, handler func(entry ListTreeEntry) error) error {
+func (g cliGit) ListBranches(handler func(branch string) error) error {
+	cmd := g.execute("branch", "--all")
+	cmd.Stderr = os.Stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("coult not pipe branch list: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to list branches: %v", err)
+	}
+	defer cmd.Wait()
+
+	reader := bufio.NewScanner(stdout)
+	for reader.Scan() {
+		line := reader.Text()
+
+		// The "selected" branch is printed like this:
+		//  " * main"
+		// Before we go forward we need to remove the `*` character.
+		if index := strings.IndexRune(line, '*'); index != -1 {
+			line = line[index+1:]
+		}
+
+		line = strings.TrimSpace(line)
+
+		err = handler(line)
+		if err != nil {
+			return fmt.Errorf("failed to process branch '%s': %v", line, err)
+		}
+	}
+
+	return nil
+}
+
+func (g cliGit) ListTags(handler func(branch string) error) error {
+	cmd := g.execute("tag", "--all")
+	cmd.Stderr = os.Stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("coult not pipe tag list: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to list tags: %v", err)
+	}
+	defer cmd.Wait()
+
+	reader := bufio.NewScanner(stdout)
+	for reader.Scan() {
+		line := reader.Text()
+		line = strings.TrimSpace(line)
+
+		err = handler(line)
+		if err != nil {
+			return fmt.Errorf("failed to process tag '%s': %v", line, err)
+		}
+	}
+
+	return nil
+}
+
+func (g cliGit) ListCommits(ref GitReference, handler func(branch string) error) error {
+	if ref.Commit != nil {
+		return ErrCannotListCommit
+	}
+	treeLike, err := ref.treeLike()
+	if err != nil {
+		return err
+	}
+	cmd := g.execute("log", "--pretty=format:'%h'", "--abbrev=-1", treeLike)
+	cmd.Stderr = os.Stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("coult not pipe commit list: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed `git log`: %v", err)
+	}
+	defer cmd.Wait()
+
+	reader := bufio.NewScanner(stdout)
+	for reader.Scan() {
+		line := reader.Text()
+		line = strings.TrimSpace(line)
+
+		err = handler(line)
+		if err != nil {
+			return fmt.Errorf("failed to process commit '%s': %v", line, err)
+		}
+	}
+
+	return nil
+}
+
+func (g cliGit) ListTree(path GitPath, handler func(entry ListTreeEntry) error) error {
+	treeLike, err := path.Reference.treeLike()
+	if err != nil {
+		return fmt.Errorf("please provide a Commit, Tag, or Branch: %v", err)
+	}
 	// TODO(gravypod): Support listing multiple revisions.
 	cmd := g.execute(
 		"ls-tree",
-		"--long",         // Include blob size
-		treeLike,         // revision to list from. Can be a remote ref, branch, tag, etc. Anything tree-like.
-		rootRelativePath, // File path to list
+		"--long",      // Include blob size
+		treeLike,      // revision to list from. Can be a remote ref, branch, tag, etc. Anything tree-like.
+		path.TreePath, // File path to list
 	)
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("could not read ls-tree output for path '%s': %v", rootRelativePath, err)
+		return fmt.Errorf("could not read ls-tree output for path '%s': %v", path.TreePath, err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to list path '%s': %v", rootRelativePath, err)
+		return fmt.Errorf("failed to list path '%s': %v", path.TreePath, err)
 	}
 	defer cmd.Wait()
 

@@ -166,8 +166,15 @@ func (s RepositoryFileSystem) lsTree(path FilePath, children bool, handler func(
 		relativePath += SeparatorString
 	}
 
-	// TODO(gravypod): Support listing multiple revisions.
-	return s.git.ListTree("master", relativePath, func(entry ListTreeEntry) error {
+	branch := "master"
+	gitPath := GitPath{
+		Reference: GitReference{
+			Branch: &branch,
+		},
+		TreePath: relativePath,
+	}
+
+	return s.git.ListTree(gitPath, func(entry ListTreeEntry) error {
 		file := gitFileInfo{
 			Hash: entry.Hash,
 			path: entry.Path,

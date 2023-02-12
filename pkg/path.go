@@ -73,6 +73,33 @@ func (p *FilePath) IsRoot() bool {
 	return len(p.Path) == 0
 }
 
+func (p *FilePath) Matches(pattern ...string) bool {
+	var parts []string
+	if p != nil {
+		parts = p.Path
+	}
+	for index, part := range pattern {
+		// Wildcard matches anything recursively.
+		if part == "..." {
+			continue
+		}
+
+		if index < len(parts) {
+			// Wildcard for matching anything within a "cell"
+			if part == "*" {
+				continue
+			}
+
+			if parts[index] == part {
+				continue
+			}
+		}
+
+		return false
+	}
+	return true
+}
+
 func (p *FilePath) String() string {
 	if p.cachedString == nil {
 		allocated := filepath.Join(".", strings.Join(p.Path, SeparatorString))

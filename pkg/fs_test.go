@@ -30,7 +30,7 @@ func fileMap(paths []os.FileInfo) map[string]os.FileInfo {
 	return pathsMap
 }
 
-func TestRepositoryFileSystemReadOnly(t *testing.T) {
+func TestBase(t *testing.T) {
 	git := newGitCliFromPlaybook(t, "base")
 	fs := NewGitFileSystem(git)
 	t.Run("reported capabilities", func(t *testing.T) {

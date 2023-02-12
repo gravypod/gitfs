@@ -17,14 +17,10 @@ package pkg
 import (
 	"github.com/google/go-cmp/cmp"
 	"sort"
-	"strconv"
 	"testing"
 )
 
-func oct(mode string) uint32 {
-	num, _ := strconv.ParseInt(mode, 8, 33)
-	return uint32(num)
-}
+var BranchMaster = "master"
 
 func TestListing(t *testing.T) {
 	git := newGitCliFromPlaybook(t, "base")
@@ -73,7 +69,12 @@ func TestListing(t *testing.T) {
 	}
 
 	var got []ListTreeEntry
-	err := git.ListTree("master", ".", func(entry ListTreeEntry) error {
+
+	gitPath := GitPath{
+		Reference: GitReference{Branch: &BranchMaster},
+		TreePath:  ".",
+	}
+	err := git.ListTree(gitPath, func(entry ListTreeEntry) error {
 		got = append(got, entry)
 		return nil
 	})
