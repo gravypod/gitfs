@@ -22,6 +22,7 @@ import (
 
 var (
 	ErrEscapesChroot = errors.New("attempted to resolve path that escapes chroot")
+	ErrNoMatch       = errors.New("pattern does not match")
 )
 
 const SeparatorString = string(filepath.Separator)
@@ -73,31 +74,40 @@ func (p *FilePath) IsRoot() bool {
 	return len(p.Path) == 0
 }
 
-func (p *FilePath) Matches(pattern ...string) bool {
+func (p *FilePath) ConsumeMatches(pattern ...string) ([]string, FilePath, error) {
+	var matches []string
+
 	var parts []string
 	if p != nil {
 		parts = p.Path
 	}
-	for index, part := range pattern {
+
+	numParts := 0
+	for index, patternPart := range pattern {
 		// Wildcard matches anything recursively.
-		if part == "..." {
+		if patternPart == "..." {
 			continue
 		}
 
+		numParts += 1
+
 		if index < len(parts) {
+			pathPart := parts[index]
 			// Wildcard for matching anything within a "cell"
-			if part == "*" {
+			if patternPart == "*" {
+				// Track the section from the path which will be removed.
+				matches = append(matches, pathPart)
 				continue
 			}
 
-			if parts[index] == part {
+			if parts[index] == patternPart {
 				continue
 			}
 		}
 
-		return false
+		return nil, FilePath{}, ErrNoMatch
 	}
-	return true
+	return matches, FilePath{Path: parts[numParts:]}, nil
 }
 
 func (p *FilePath) String() string {
