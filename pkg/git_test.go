@@ -26,13 +26,13 @@ var BranchMaster = "master"
 func TestListing(t *testing.T) {
 	git := newGitCliFromPlaybook(t, "base")
 
-	want := []ListTreeEntry{
+	want := []gitism.TreeEntry{
 		{
 			Mode: gitism.FileMode{
 				Type:  gitism.RegularFile,
 				Perms: gitism.PermissionMask(0755),
 			},
-			Object: "blob",
+			Object: gitism.BlobObject,
 			Hash:   "2266c0a976d1b3c4df0b6d02217d1bbe11110693",
 			Size:   "633",
 			Path:   "executable.sh",
@@ -42,7 +42,7 @@ func TestListing(t *testing.T) {
 				Type:  gitism.RegularFile,
 				Perms: gitism.PermissionMask(0644),
 			},
-			Object: "blob",
+			Object: gitism.BlobObject,
 			Hash:   "557db03de997c86a4a028e1ebd3a1ceb225be238",
 			Size:   "12",
 			Path:   "real.txt",
@@ -52,7 +52,7 @@ func TestListing(t *testing.T) {
 				Type:  gitism.Symlink,
 				Perms: gitism.PermissionMask(0),
 			},
-			Object: "blob",
+			Object: gitism.BlobObject,
 			Hash:   "c9c61fe1fb4b3bbadb18744348069f1cb5aa7416",
 			Size:   "8",
 			Path:   "symlink.txt",
@@ -62,20 +62,20 @@ func TestListing(t *testing.T) {
 				Type:  gitism.Directory,
 				Perms: gitism.PermissionMask(0444),
 			},
-			Object: "tree",
+			Object: gitism.TreeObject,
 			Hash:   "4e59bddb9f480a1b6d0041c534b5c53a5921dd52",
 			Size:   "-",
 			Path:   "test",
 		},
 	}
 
-	var got []ListTreeEntry
+	var got []gitism.TreeEntry
 
 	gitPath := GitPath{
 		Reference: GitReference{Branch: &BranchMaster},
 		TreePath:  ".",
 	}
-	err := git.ListTree(gitPath, func(entry ListTreeEntry) error {
+	err := git.ListTree(gitPath, func(entry gitism.TreeEntry) error {
 		got = append(got, entry)
 		return nil
 	})
@@ -83,8 +83,8 @@ func TestListing(t *testing.T) {
 		t.Fatalf("failed to list main branch: %v", err)
 	}
 
-	trans := cmp.Transformer("Sort", func(in []ListTreeEntry) []ListTreeEntry {
-		out := append([]ListTreeEntry(nil), in...) // Copy input to avoid mutating it
+	trans := cmp.Transformer("Sort", func(in []gitism.TreeEntry) []gitism.TreeEntry {
+		out := append([]gitism.TreeEntry(nil), in...) // Copy input to avoid mutating it
 		sort.Slice(out, func(i, j int) bool {
 			return out[i].Path < out[j].Path
 		})

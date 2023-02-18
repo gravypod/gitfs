@@ -27,17 +27,9 @@ import (
 	"time"
 )
 
-type GitObjectType int
-
-const (
-	GitUnknown GitObjectType = iota
-	GitBlob
-	GitTree
-)
-
 type gitFileInfo struct {
 	mode os.FileMode
-	Type GitObjectType
+	Type gitism.ObjectType
 	// TODO(gravypod): should this be parsed into an int or is this a waste of cycles?
 	Hash string
 
@@ -166,7 +158,7 @@ func (s ReferenceFileSystem) lsTree(path FilePath, children bool, handler func(f
 		TreePath: relativePath,
 	}
 
-	return s.git.ListTree(gitPath, func(entry ListTreeEntry) error {
+	return s.git.ListTree(gitPath, func(entry gitism.TreeEntry) error {
 		file := gitFileInfo{
 			Hash: entry.Hash,
 			path: entry.Path,
@@ -174,15 +166,7 @@ func (s ReferenceFileSystem) lsTree(path FilePath, children bool, handler func(f
 		}
 
 		// Type
-		var typeMap = map[string]GitObjectType{
-			"blob": GitBlob,
-			"tree": GitTree,
-		}
-		if objectType, ok := typeMap[entry.Object]; ok {
-			file.Type = objectType
-		} else {
-			objectType = GitUnknown
-		}
+		file.Type = entry.Object
 
 		// Mode
 		file.mode = fs.FileMode(entry.Mode.Perms)
@@ -282,7 +266,7 @@ func (s ReferenceFileSystem) Stat(filename string) (os.FileInfo, error) {
 	if path.IsRoot() {
 		return gitFileInfo{
 			mode: 0555 | os.ModeDir,
-			Type: GitTree,
+			Type: gitism.TreeObject,
 			Hash: "",
 			path: filename,
 			size: 0,
