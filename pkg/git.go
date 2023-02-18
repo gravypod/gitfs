@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/gravypod/gitfs/pkg/gitism"
 	"io"
 	"log"
 	"os"
@@ -35,26 +36,8 @@ var (
 
 type GitUnixPerms uint16
 
-const (
-	GitRegularFile GitFileType = iota
-	GitDirectory
-	GitSymlink
-)
-
 func (perms GitUnixPerms) String() string {
 	return strconv.FormatUint(uint64(perms), 8)
-}
-
-type GitFileType uint8
-
-func (fileType GitFileType) String() string {
-	if fileType == GitSymlink {
-		return "GitSymlink"
-	}
-	if fileType == GitDirectory {
-		return "GitDirectory"
-	}
-	return "GitRegularFile"
 }
 
 type GitReference struct {
@@ -90,43 +73,8 @@ type GitPath struct {
 	TreePath  string
 }
 
-type GitFileMode struct {
-	Type            GitFileType
-	UnixPermissions GitUnixPerms
-}
-
-// newGitFileMode takes a git file mode oct and turns it into fs.FileMode objects. It performs other fixes to the file
-// mode to hack around edge cases in git. More details are available here: https://unix.stackexchange.com/a/450488
-func newGitFileMode(gitMode uint16) GitFileMode {
-	// Unixy file permissions are stored in the last 9 bits.
-	var (
-		gitPermsMask     uint16 = 0000777
-		gitDirectoryMask uint16 = 0040000
-		gitSymlinkMask   uint16 = 0120000
-		gitLinkMask      uint16 = 0160000
-	)
-
-	mode := GitFileMode{
-		UnixPermissions: GitUnixPerms(gitMode & gitPermsMask),
-	}
-
-	if gitMode&gitSymlinkMask == gitSymlinkMask || gitMode&gitLinkMask == gitLinkMask {
-		mode.Type = GitSymlink
-	} else if gitMode&gitDirectoryMask == gitDirectoryMask {
-		// Git does not store permissions for directories so we need
-		// to add these back in. 444 means user, group, and other can
-		// read which essentially makes this a read-only directory.
-		mode.Type = GitDirectory
-		mode.UnixPermissions = 0444
-	} else {
-		mode.Type = GitRegularFile
-	}
-
-	return mode
-}
-
 type ListTreeEntry struct {
-	Mode   GitFileMode
+	Mode   gitism.FileMode
 	Object string
 	Hash   string
 	Size   string
@@ -165,7 +113,7 @@ func newListTreeEntry(line string) (ListTreeEntry, error) {
 	}
 
 	return ListTreeEntry{
-		Mode:   newGitFileMode(uint16(modeNum)),
+		Mode:   gitism.NewFileMode(uint16(modeNum)),
 		Object: strings.TrimSpace(objectTypeText),
 		Hash:   strings.TrimSpace(hashText),
 		Size:   strings.TrimSpace(sizeText),

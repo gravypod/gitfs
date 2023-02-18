@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/go-git/go-billy/v5"
+	"github.com/gravypod/gitfs/pkg/gitism"
 	"io/fs"
 	"log"
 	"os"
@@ -184,10 +185,10 @@ func (s ReferenceFileSystem) lsTree(path FilePath, children bool, handler func(f
 		}
 
 		// Mode
-		file.mode = fs.FileMode(entry.Mode.UnixPermissions)
-		if entry.Mode.Type == GitSymlink {
+		file.mode = fs.FileMode(entry.Mode.Perms)
+		if entry.Mode.Type == gitism.Symlink {
 			file.mode |= fs.ModeSymlink
-		} else if entry.Mode.Type == GitDirectory {
+		} else if entry.Mode.Type == gitism.Directory {
 			file.mode |= fs.ModeDir
 		}
 

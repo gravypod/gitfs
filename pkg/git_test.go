@@ -16,6 +16,7 @@ package pkg
 
 import (
 	"github.com/google/go-cmp/cmp"
+	"github.com/gravypod/gitfs/pkg/gitism"
 	"sort"
 	"testing"
 )
@@ -27,9 +28,9 @@ func TestListing(t *testing.T) {
 
 	want := []ListTreeEntry{
 		{
-			Mode: GitFileMode{
-				Type:            GitRegularFile,
-				UnixPermissions: GitUnixPerms(0755),
+			Mode: gitism.FileMode{
+				Type:  gitism.RegularFile,
+				Perms: gitism.PermissionMask(0755),
 			},
 			Object: "blob",
 			Hash:   "2266c0a976d1b3c4df0b6d02217d1bbe11110693",
@@ -37,9 +38,9 @@ func TestListing(t *testing.T) {
 			Path:   "executable.sh",
 		},
 		{
-			Mode: GitFileMode{
-				Type:            GitRegularFile,
-				UnixPermissions: GitUnixPerms(0644),
+			Mode: gitism.FileMode{
+				Type:  gitism.RegularFile,
+				Perms: gitism.PermissionMask(0644),
 			},
 			Object: "blob",
 			Hash:   "557db03de997c86a4a028e1ebd3a1ceb225be238",
@@ -47,9 +48,9 @@ func TestListing(t *testing.T) {
 			Path:   "real.txt",
 		},
 		{
-			Mode: GitFileMode{
-				Type:            GitSymlink,
-				UnixPermissions: GitUnixPerms(0),
+			Mode: gitism.FileMode{
+				Type:  gitism.Symlink,
+				Perms: gitism.PermissionMask(0),
 			},
 			Object: "blob",
 			Hash:   "c9c61fe1fb4b3bbadb18744348069f1cb5aa7416",
@@ -57,9 +58,9 @@ func TestListing(t *testing.T) {
 			Path:   "symlink.txt",
 		},
 		{
-			Mode: GitFileMode{
-				Type:            GitDirectory,
-				UnixPermissions: GitUnixPerms(0444),
+			Mode: gitism.FileMode{
+				Type:  gitism.Directory,
+				Perms: gitism.PermissionMask(0444),
 			},
 			Object: "tree",
 			Hash:   "4e59bddb9f480a1b6d0041c534b5c53a5921dd52",
