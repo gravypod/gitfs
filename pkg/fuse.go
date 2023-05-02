@@ -29,6 +29,8 @@ import (
 	"time"
 )
 
+var latest time.Time = time.Unix(1<<63-62135596801, 999999999)
+
 type billyInode struct {
 	Id       fuseops.InodeID
 	ParentId fuseops.InodeID
@@ -197,6 +199,8 @@ func (f *billyFuse) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) 
 	// Copy over information.
 	op.Entry.Child = childId
 	op.Entry.Attributes = infoToAttributes(inode.info)
+	op.Entry.AttributesExpiration = latest
+	op.Entry.EntryExpiration = latest
 
 	return nil
 }
@@ -208,16 +212,7 @@ func (f *billyFuse) GetInodeAttributes(ctx context.Context, op *fuseops.GetInode
 		return fuse.ENOENT
 	}
 	op.Attributes = infoToAttributes(inode.info)
-	op.AttributesExpiration = time.Now().Add(time.Second)
-	return nil
-}
-
-func (f *billyFuse) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) error {
-	log.Println("fuse OpenDir()")
-	return nil
-}
-
-func (f *billyFuse) ReleaseDirHandle(ctx context.Context, op *fuseops.ReleaseDirHandleOp) error {
+	op.AttributesExpiration = latest
 	return nil
 }
 
@@ -298,27 +293,15 @@ func (f *billyFuse) getBillyPath(inodeId fuseops.InodeID) (string, error) {
 	return f.fs.Join(".", path), nil
 }
 
-func (f *billyFuse) OpenFile(ctx context.Context, op *fuseops.OpenFileOp) error {
-	log.Println("fuse OpenFile()")
+func (f *billyFuse) ReadFile(ctx context.Context, op *fuseops.ReadFileOp) error {
+	log.Println("fuse ReadFile()")
 	path, err := f.getBillyPath(op.Inode)
 	if err != nil {
 		return err
 	}
 
-	file, err := f.fs.Open(path)
+	handle, err := f.fs.Open(path)
 	if err != nil {
-		return fuse.EIO
-	}
-
-	f.handles[op.Handle] = file
-
-	return nil
-}
-
-func (f *billyFuse) ReadFile(ctx context.Context, op *fuseops.ReadFileOp) error {
-	log.Println("fuse ReadFile()")
-	handle, ok := f.handles[op.Handle]
-	if !ok {
 		return fuse.EIO
 	}
 
